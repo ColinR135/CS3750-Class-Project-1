@@ -3,20 +3,11 @@ import java.io.FileInputStream;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
 
-public class SenderProgram{
+public class SHA256{
   private static int BUFFER_SIZE = 32 * 1024;
-  static Scanner scanner = new Scanner(System.in); 
 
   public static void main(String[] args) throws Exception {
-    Scanner scanner = new Scanner(System.in);
-
-    String filename = "test.txt";
-    System.out.println("Enter the filename to hash (default: test.txt): "); 
-    String userInput = scanner.nextLine();
-    if (!userInput.isEmpty()) {
-      filename = userInput;
-    }  
-    System.out.println(filename + ": " + md(filename));
+    System.out.println("test.txt: " + md("test.txt"));
   }
 
   public static String md(String f) throws Exception {
