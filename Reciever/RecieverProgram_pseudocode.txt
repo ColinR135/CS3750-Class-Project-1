@@ -68,9 +68,4 @@ Commands (compile/run) - PowerShell examples:
 - Run receiver (after copying message.rsacipher into Reciever/):
   java -cp Reciever RecieverProgram
 
-Re-implementation tips (language-agnostic):
-- Use streaming I/O for RSA decryption and hashing to support large messages.
-- Carefully handle partial final RSA blocks when reading ciphertext (read by KEY_BYTES boundaries).
-- Validate key lengths and formats at startup with clear error messages.
 
-End of pseudocode
