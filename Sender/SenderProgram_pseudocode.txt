@@ -1,0 +1,88 @@
+SenderProgram - Pseudocode
+
+Prerequisites:
+- Files expected in Sender/ before running:
+  - Sender/YPublic.key   (receiver Y's RSA public key, X.509 DER or PEM)
+  - Sender/symmetric.key (shared AES key between X and Y; raw 16/24/32 bytes, or hex/base64 text)
+- Default message path: Sender/test.txt (binary-safe)
+- Output files produced in Sender/: message.dd, message.add-msg, message.rsacipher
+
+High-level goal:
+Compute SHA-256(M), optionally flip first byte, AES-encrypt the 32-byte digest (AES/ECB/NoPadding), prepend that to M, then RSA-encrypt the whole (AES||M) in fixed-size RSA blocks and write ciphertext.
+
+PSEUDOCODE:
+1) Read AES key Kxy from "Sender/symmetric.key"
+   - If file length is 16|24|32 bytes: treat as raw AES key
+   - Else if content is hex string: decode hex to bytes
+   - Else if content is PEM/base64: base64-decode to bytes
+   - Validate final key length is 16/24/32 bytes else error
+
+2) Read RSA public key Ky+ from "Sender/YPublic.key"
+   - Accept X.509 DER bytes or PEM-wrapped (-----BEGIN PUBLIC KEY-----)
+   - Convert to PublicKey object (RSA)
+
+3) Prompt user:
+   - "Input the name of the message file (default: Sender/test.txt): "
+   - If empty input, use "Sender/test.txt"
+   - Let MESSAGE_PATH be the chosen path
+
+4) Compute SHA-256(M) streaming (do NOT load entire file into memory):
+   - Open MESSAGE_PATH for binary read
+   - Create SHA-256 MessageDigest
+   - While read chunk from file (e.g., 32KB): update digest with chunk
+   - After EOF: DIGEST = digest.digest()  // 32 bytes
+   - Print hex(DIGEST)
+
+5) Prompt to optionally invert first byte:
+   - Prompt: "Do you want to invert the 1st byte in SHA256(M)? (Y or N): "
+   - If user answers 'Y' (case-insensitive): DIGEST[0] = (byte) ~DIGEST[0]
+   - Print hex(DIGEST) and continue
+   - Save DIGEST (raw 32 bytes) to file "Sender/message.dd"
+
+6) AES-encrypt the digest with AES/ECB/NoPadding using Kxy:
+   - REQUIREMENT: length(DIGEST) % 16 == 0 (SHA-256=32 bytes) so OK
+   - Cipher: AES/ECB/NoPadding
+   - AES_CIPHER = AES_encrypt(Kxy, DIGEST)
+   - Print hex(AES_CIPHER)
+
+7) Build "Sender/message.add-msg":
+   - Open "Sender/message.add-msg" for write (truncate/create)
+   - Write AES_CIPHER (binary)
+   - Re-open MESSAGE_PATH for binary read
+   - Append the message content to message.add-msg in streaming chunks (e.g., 4KB or 32KB)
+   - Close files
+
+8) RSA-encrypt "Sender/message.add-msg" into "Sender/message.rsacipher":
+   - Load Ky+ (public RSA key)
+   - Determine RSA encryption plaintext block size for PKCS#1 v1.5:
+       BLOCK_SIZE = (keySizeInBytes) - 11
+     - Example: 1024-bit key => keySizeInBytes=128 => BLOCK_SIZE=117
+       (if you only know key bit-length, compute bytes = (bits+7)//8)
+   - Open message.add-msg for binary read
+   - Open message.rsacipher for binary write
+   - Loop: read up to BLOCK_SIZE bytes into buffer
+       - If bytesRead < BLOCK_SIZE: copy to a new array sized bytesRead
+       - CIPHERTEXT_BLOCK = RSA_encrypt_PCKS1(Ky+, buffer)
+       - Write CIPHERTEXT_BLOCK to message.rsacipher
+   - Close files
+
+9) Success: program prints that files were written:
+   - Sender/message.dd  (32 raw bytes)
+   - Sender/message.add-msg  (AES(digest) || M)
+   - Sender/message.rsacipher  (RSA-encrypted blocks)
+
+Error cases and notes:
+- AES/ECB/NoPadding: digest must be a multiple of 16 bytes. SHA-256 is 32 bytes, so no padding is needed.
+- If your RSA key is not PKCS#1/PKCS1Padding compatible, change the RSA cipher and block size accordingly.
+- Key format differences:
+  - Public key usually in X.509 SubjectPublicKeyInfo format (Java X509EncodedKeySpec expects that)
+  - Private key (for recipient) should be PKCS#8 if implemented symmetric receiver code expects it
+- For streaming large files, choose a chunk size like 32KB to balance memory vs IO.
+- Do not assume M is text; treat as binary data.
+
+Commands (compile/run) - PowerShell examples:
+- Compile:
+  javac -d Sender Sender/SenderProgram.java
+- Run sender:
+  java -cp Sender SenderProgram
+
