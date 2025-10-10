@@ -26,6 +26,9 @@ public class SenderProgram {
 	public static void main(String[] args) throws Exception {
 		Scanner sc = new Scanner(System.in);
 
+		// Detect whether the program is being run from inside the Sender/ directory.
+		boolean runningFromSenderDir = Paths.get("").toAbsolutePath().getFileName().toString().equals("Sender");
+
 		// Locate AES key and RSA public key (try Sender/ then KeyGen/)
 		Path aesPath = findFirstExisting("Sender/symmetric.key", "KeyGen/symmetric.key", "symmetric.key");
 		Path pubPath = findFirstExisting("Sender/YPublic.key", "KeyGen/YPublic.key", "YPublic.key");
@@ -37,7 +40,9 @@ public class SenderProgram {
 
 		System.out.print("Input the name of the message file (default: Sender/test.txt): ");
 		String input = sc.nextLine().trim();
-		String messagePath = input.isEmpty() ? "Sender/test.txt" : input;
+		String messagePath;
+		if (input.isEmpty()) messagePath = runningFromSenderDir ? "test.txt" : "Sender/test.txt";
+		else messagePath = input;
 
 		// Compute SHA-256 over message (streaming)
 		byte[] digest = computeSHA256(messagePath);
@@ -53,8 +58,8 @@ public class SenderProgram {
 			System.out.println(toHex(digest));
 		}
 
-		// Save digest
-		Files.write(Paths.get("Sender/message.dd"), digest);
+		// Save digest (adjust path if we're running from inside Sender/)
+		Files.write(Paths.get(adjustForRunDir("Sender/message.dd", runningFromSenderDir)), digest);
 
 		// AES-encrypt digest with AES/ECB/NoPadding
 		if (digest.length % 16 != 0) {
@@ -65,11 +70,12 @@ public class SenderProgram {
 		System.out.println(toHex(aesCipher));
 
 		// Create message.add-msg: write AES cipher then append message bytes
-		try (FileOutputStream out = new FileOutputStream("Sender/message.add-msg")) {
+		String addMsgPath = adjustForRunDir("Sender/message.add-msg", runningFromSenderDir);
+		try (FileOutputStream out = new FileOutputStream(addMsgPath)) {
 			out.write(aesCipher);
 		}
 		try (InputStream in = new BufferedInputStream(new FileInputStream(messagePath));
-				 FileOutputStream out = new FileOutputStream("Sender/message.add-msg", true)) {
+				 FileOutputStream out = new FileOutputStream(addMsgPath, true)) {
 			byte[] buf = new byte[4096];
 			int r;
 			while ((r = in.read(buf)) != -1) {
@@ -77,16 +83,36 @@ public class SenderProgram {
 			}
 		}
 
-		// RSA-encrypt message.add-msg into message.rsacipher
-		rsaEncryptFile(kyPlus, "Sender/message.add-msg", "Sender/message.rsacipher");
+		// RSA-encrypt message.add-msg into message.rsacipher (adjusted paths)
+		String addMsgIn = adjustForRunDir("Sender/message.add-msg", runningFromSenderDir);
+		String rsaOut = adjustForRunDir("Sender/message.rsacipher", runningFromSenderDir);
+		rsaEncryptFile(kyPlus, addMsgIn, rsaOut);
 
-		System.out.println("Done. Files written: Sender/message.dd, Sender/message.add-msg, Sender/message.rsacipher");
+		System.out.println("Done. Files written: " + adjustForRunDir("Sender/message.dd", runningFromSenderDir)
+			+ ", " + addMsgPath + ", " + rsaOut);
+	}
+
+	private static String adjustForRunDir(String path, boolean runningFromSenderDir) {
+		if (!runningFromSenderDir) return path;
+		if (path.startsWith("Sender/")) return path.substring("Sender/".length());
+		if (path.startsWith("Sender\\")) return path.substring("Sender\\".length());
+		return path;
 	}
 
 	private static Path findFirstExisting(String... paths) {
 		for (String p : paths) {
+			// 1) try the path as provided
 			Path path = Paths.get(p);
 			if (Files.exists(path)) return path;
+			// 2) try filename-only (useful when running from inside Sender/)
+			Path filenameOnly = Paths.get(path.getFileName().toString());
+			if (Files.exists(filenameOnly)) return filenameOnly;
+			// 3) try parent-up variant (useful when running from Sender/ but keys are in repo root)
+			Path parentUp = Paths.get("..").resolve(p);
+			if (Files.exists(parentUp)) return parentUp;
+			// 4) try parent-up filename-only
+			Path parentUpFilename = Paths.get("..").resolve(path.getFileName().toString());
+			if (Files.exists(parentUpFilename)) return parentUpFilename;
 		}
 		return null;
 	}
