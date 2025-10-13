@@ -1,4 +1,4 @@
-package Receiver;
+//package Receiver;
 
 import java.io.*;
 
@@ -33,7 +33,7 @@ public class ReceiverProgram {
 
     public static byte[] readAESKey() throws Exception {
         // relative path to the key file
-        Path path = Paths.get("Receiver/symmetric.key");
+        Path path = Paths.get("symmetric.key");
         byte[] fileBytes = Files.readAllBytes(path);
 
         // Case 1: raw binary key (already 16, 24, or 32 bytes)
@@ -71,7 +71,7 @@ public class ReceiverProgram {
 
 public static PrivateKey readRSAPrivateKey() throws Exception {
     // Path to the binary private key file
-    String path = "Receiver/YPrivate.key";
+    String path = "YPrivate.key";
 
     BigInteger modulus;
     BigInteger privateExponent;
@@ -230,8 +230,8 @@ public static void verifyMessageDigest(String decryptedFilePath, byte[] aesDecry
         }
         try {
             PrivateKey rsaPrivateKey = readRSAPrivateKey();
-            String inputFile = "Receiver/message.rsacipher";
-            String outputFile = "Receiver/message.add-msg";
+            String inputFile = "message.rsacipher";
+            String outputFile = "message.add-msg";
             rsaDecryptMessage(rsaPrivateKey, inputFile, outputFile);
             System.out.println("Message decrypted successfully to " + outputFile);
         } catch (Exception e) {
@@ -239,7 +239,7 @@ public static void verifyMessageDigest(String decryptedFilePath, byte[] aesDecry
             e.printStackTrace();
         }
         try {
-            String decryptedFile = "Receiver/message.add-msg";
+            String decryptedFile = "message.add-msg";
             byte[] aesDigest = parseMessageDigest(decryptedFile);
             System.out.println("Read AES_CIPHER_DIGEST successfully: " + aesDigest.length + " bytes");
         } catch (Exception e) {
@@ -252,12 +252,12 @@ public static void verifyMessageDigest(String decryptedFilePath, byte[] aesDecry
             //System.out.println("AES key loaded successfully (" + aesKey.length + " bytes)");
 
             // Step 4: Parse decrypted message to get AES_CIPHER_DIGEST
-            String decryptedFile = "Receiver/message.add-msg";
+            String decryptedFile = "message.add-msg";
             byte[] aesDigest = parseMessageDigest(decryptedFile);
             System.out.println("AES_CIPHER_DIGEST read successfully: " + aesDigest.length + " bytes");
 
             // Step 5: AES-decrypt AES_CIPHER_DIGEST
-            String outputDigestFile = "Receiver/message.dd";
+            String outputDigestFile = "message.dd";
             aesDecryptDigest(aesKey, aesDigest, outputDigestFile);
 
         } catch (Exception e) {
@@ -270,13 +270,13 @@ public static void verifyMessageDigest(String decryptedFilePath, byte[] aesDecry
             byte[] aesKey = readAESKey();
 
             // Step 4: Parse decrypted message to get AES_CIPHER_DIGEST
-            byte[] aesDigest = parseMessageDigest("Receiver/message.add-msg");
+            byte[] aesDigest = parseMessageDigest("message.add-msg");
 
             // Step 5 + return the decrypted digest
-            byte[] aesDecryptedDigest = aesDecryptDigest(aesKey, aesDigest, "Receiver/message.dd");
+            byte[] aesDecryptedDigest = aesDecryptDigest(aesKey, aesDigest, "message.dd");
 
             // Steps 6–7: Compute SHA-256 over message and verify digests
-            verifyMessageDigest("Receiver/message.add-msg", aesDecryptedDigest);
+            verifyMessageDigest("message.add-msg", aesDecryptedDigest);
 
         } catch (Exception e) {
             System.err.println("Error during processing: " + e.getMessage());
