@@ -1,33 +1,18 @@
-//package Receiver;
-
 import java.io.*;
-
-import java.security.Key;
-import java.security.PublicKey;
 import java.security.PrivateKey;
-import java.security.KeyPair;
-import java.security.KeyPairGenerator;
 import java.security.MessageDigest;
-import java.security.SecureRandom;
-import java.security.Security;
-
 import java.security.KeyFactory;
-import java.security.spec.RSAPublicKeySpec;
-import java.security.spec.X509EncodedKeySpec;
 import java.util.Arrays;
 import java.util.Base64;
-import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.RSAPrivateKeySpec;
-
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-
 import javax.crypto.Cipher;
 import javax.crypto.spec.SecretKeySpec;
-
+import java.util.Scanner;
 
 public class ReceiverProgram {
 
@@ -211,81 +196,49 @@ public static void verifyMessageDigest(String decryptedFilePath, byte[] aesDecry
     }
 }
 
+public static void main(String[] args) {
+    try {
+        // 1️⃣ Load AES + RSA keys
+        byte[] aesKey = readAESKey();
+        PrivateKey rsaPrivateKey = readRSAPrivateKey();
+        System.out.println("Keys loaded successfully.");
 
-// 🔹 Test entry point
-    public static void main(String[] args) {
-        try {
-            byte[] aesKey = readAESKey();
-            System.out.println("AES key loaded successfully (" + aesKey.length + " bytes)");
-        } catch (Exception e) {
-            System.err.println("Error loading AES key: " + e.getMessage());
-            e.printStackTrace();
-        }
-        try {
-            PrivateKey rsaPrivateKey = readRSAPrivateKey();
-            System.out.println("RSA private key loaded successfully: " + rsaPrivateKey.getAlgorithm());
-        } catch (Exception e) {
-            System.err.println("Error loading RSA private key: " + e.getMessage());
-            e.printStackTrace();
-        }
-        try {
-            PrivateKey rsaPrivateKey = readRSAPrivateKey();
-            String inputFile = "message.rsacipher";
-            String outputFile = "message.add-msg";
-            rsaDecryptMessage(rsaPrivateKey, inputFile, outputFile);
-            System.out.println("Message decrypted successfully to " + outputFile);
-        } catch (Exception e) {
-            System.err.println("Error decrypting message: " + e.getMessage());
-            e.printStackTrace();
-        }
-        try {
-            String decryptedFile = "message.add-msg";
-            byte[] aesDigest = parseMessageDigest(decryptedFile);
-            System.out.println("Read AES_CIPHER_DIGEST successfully: " + aesDigest.length + " bytes");
-        } catch (Exception e) {
-            System.err.println("Error parsing decrypted message: " + e.getMessage());
-            e.printStackTrace();
-        }
-        try {
-            // Step 1: Load AES key
-            byte[] aesKey = readAESKey();
-            //System.out.println("AES key loaded successfully (" + aesKey.length + " bytes)");
+        // 2️⃣ RSA-decrypt message
+        rsaDecryptMessage(rsaPrivateKey, "message.rsacipher", "message.add-msg");
+        System.out.println("RSA decryption done.");
 
-            // Step 4: Parse decrypted message to get AES_CIPHER_DIGEST
-            String decryptedFile = "message.add-msg";
-            byte[] aesDigest = parseMessageDigest(decryptedFile);
-            System.out.println("AES_CIPHER_DIGEST read successfully: " + aesDigest.length + " bytes");
+        // 3️⃣ Parse and AES-decrypt the embedded digest
+        byte[] aesDigest = parseMessageDigest("message.add-msg");
+        byte[] aesDecryptedDigest = aesDecryptDigest(aesKey, aesDigest, "message.dd");
 
-            // Step 5: AES-decrypt AES_CIPHER_DIGEST
-            String outputDigestFile = "message.dd";
-            aesDecryptDigest(aesKey, aesDigest, outputDigestFile);
+        // 4️⃣ Verify SHA-256
+        verifyMessageDigest("message.add-msg", aesDecryptedDigest);
 
-        } catch (Exception e) {
-            System.err.println("Error during processing: " + e.getMessage());
-            e.printStackTrace();
+        // 5️⃣ Ask for final plaintext output
+        System.out.println("\nAll decryption and verification complete!");
+        try (Scanner scanner = new Scanner(System.in)) {
+            System.out.print("Enter name for final plaintext output file: ");
+            String finalOutputName = scanner.nextLine().trim();
+            if (finalOutputName.isEmpty()) finalOutputName = "final_message.txt";
+
+            try (BufferedInputStream bis = new BufferedInputStream(new FileInputStream("message.add-msg"));
+                 BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(finalOutputName))) {
+
+                bis.skip(32); // skip digest bytes
+                byte[] buffer = new byte[4096];
+                int bytesRead;
+                while ((bytesRead = bis.read(buffer)) != -1) {
+                    bos.write(buffer, 0, bytesRead);
+                }
+
+                System.out.println("Final plaintext written to: " + finalOutputName);
+            }
         }
 
-        try {
-            // Step 1: Load AES key
-            byte[] aesKey = readAESKey();
-
-            // Step 4: Parse decrypted message to get AES_CIPHER_DIGEST
-            byte[] aesDigest = parseMessageDigest("message.add-msg");
-
-            // Step 5 + return the decrypted digest
-            byte[] aesDecryptedDigest = aesDecryptDigest(aesKey, aesDigest, "message.dd");
-
-            // Steps 6–7: Compute SHA-256 over message and verify digests
-            verifyMessageDigest("message.add-msg", aesDecryptedDigest);
-
-        } catch (Exception e) {
-            System.err.println("Error during processing: " + e.getMessage());
-            e.printStackTrace();
-}
-
+    } catch (Exception e) {
+        System.err.println("Fatal error: " + e.getMessage());
+        e.printStackTrace();
     }
-
-        }
- 
+}}
     
 
